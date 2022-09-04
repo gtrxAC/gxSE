@@ -1,14 +1,10 @@
 .vscode/
 
-android/build
-android/ndk
-android/sdk
-
 include/raylib.h
 lib
 raylib
 
-game
+gxse
 *.exe
 *.apk
 *.keystore

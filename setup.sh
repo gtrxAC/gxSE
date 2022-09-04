@@ -2,13 +2,11 @@
 # ______________________________________________________________________________
 #
 #  Set up raylib project
-#  Configure the config.sh for your project before setting up
 #
 #  - Linux                   ./setup.sh
 #  - Windows (w64devkit)     ./setup.sh
 #  - Windows (cross compile) TARGET=Windows_NT ./setup.sh
 #  - Web                     TARGET=Web ./setup.sh
-#  - Android                 TARGET=Android ./setup.sh
 # ______________________________________________________________________________
 #
 source config.sh
@@ -116,11 +114,6 @@ case "$TARGET" in
 		cp raylib.h ../../include
 		make clean || make clean -e || rm -fv *.o
 		cd ../..
-		;;
-
-	"Android")
-		source android/setup.sh
-		exit
 		;;
 
 	*)

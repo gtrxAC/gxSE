@@ -2,16 +2,17 @@
 # ______________________________________________________________________________
 #
 #  Compile raylib project
-#  Configure the config.sh for your project before building
 #
 #  - Linux                   ./build.sh
 #  - Windows (w64devkit)     ./build.sh
 #  - Windows (cross compile) TARGET=Windows_NT ./build.sh
 #  - Web                     TARGET=Web ./build.sh
-#  - Android                 TARGET=Android ./build.sh
 #
 #  - Debug                   DEBUG=1 ./build.sh
 #  - Build and run           ./build.sh -r
+#
+#  These options can be combined, for example:
+#    TARGET=Windows_NT DEBUG=1 ./build.sh -r
 # ______________________________________________________________________________
 #
 source config.sh
@@ -35,7 +36,7 @@ case "$TARGET" in
 		CC="$ARCH-w64-mingw32-gcc"
 		EXT=".exe"
 		PLATFORM="PLATFORM_DESKTOP"
-		TARGET_FLAGS="-lopengl32 -lgdi32 -lwinmm -static -Wl,--subsystem,windows"
+		TARGET_FLAGS="-lopengl32 -lgdi32 -lwinmm -lcomdlg32 -lole32 -Wl,--subsystem,windows"
 		;;
 
 	"Linux")
@@ -51,11 +52,6 @@ case "$TARGET" in
 		TARGET_FLAGS="-s ASYNCIFY -s USE_GLFW=3 -s TOTAL_MEMORY=67108864 \
 		-s FORCE_FILESYSTEM=1 --shell-file src/shell.html --preload-file assets"
 		source emsdk/emsdk_env.sh
-		;;
-
-	"Android")
-		source android/build.sh
-		exit
 		;;
 
 	*)
