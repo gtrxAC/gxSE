@@ -270,11 +270,7 @@ int main(int argc, char **argv) {
 	InitWindow(1024, 768, "gxSE");
 	SetTargetFPS(120);
 
-	// Image fontImg = LoadImageFromMemory(".png", assets_font_png, assets_font_png_len);
-	// font = LoadFontFromImage(fontImg, MAGENTA, ' ');
-	// SetTextureFilter(font.texture, TEXTURE_FILTER_ANISOTROPIC_16X);
 	font = LoadFontEx("assets/font.ttf", 20, NULL, 0);
-	SetTextureFilter(font.texture, TEXTURE_FILTER_ANISOTROPIC_16X);
 
 	image = GenImageColor(32, 32, BLANK);
 	reloadAlphaPattern();
