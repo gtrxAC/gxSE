@@ -1,267 +1,173 @@
-#include "raylib.h"
-#include "tinyfiledialogs.h"
+#include "common.h"
+#include "command.h"
+#include "util.h"
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <math.h>
+const char *tools[] = {
+	"PENCIL",
+	"ERASER",
+	"BUCKET",
+	"LINE",
+	"RECT",
+	"CIRCLE"
+};
 
-#define SCALED_W (image.width*scale)
-#define SCALED_H (image.height*scale)
+void input(State *s) {
+	int chr = GetCharPressed();
+	switch (chr) {
+		case 0: {
+			int key = GetKeyPressed();
+			switch (key) {
+				// backspace
+				case KEY_BACKSPACE: {
+					int len = strlen(s->commandBuf);
+					if (!len) break;
+					s->commandBuf[len - 1] = 0;
+					s->commandCursor--;
+					updateCursor(s);
+					break;
+				}
 
-// Get one color value from a pixel in the image data. GP_ defines should be used for 'c'.
-#define GETPIXEL(x, y, c) \
-	((unsigned char *)image.data)[(y*image.width + x)*4 + c]
+				case KEY_ENTER: {
+					command(s, s->commandBuf);
+					// fall through
+				}
 
-#define GP_RED 0
-#define GP_GREEN 1
-#define GP_BLUE 2
-#define GP_ALPHA 3
-
-#define DRAWTEXTF(text, x, y, color) \
-	DrawTextEx(font, text, (Vector2) {x, y}, 20, 2, color)
-
-int scale = 4;
-int frameCount = 0;
-bool linePaint;
-bool grid;
-char bottomText[256];
-Font font;
-Image image;
-Texture imagetx;
-RenderTexture alphaPattern;
-Color colorA = WHITE;
-Color colorB = BLACK;
-Vector2 offset;
-Vector2 mouseDragStart;
-
-enum {
-	T_INVALID = -1,
-	T_PENCIL,
-	T_ERASER,
-	T_BUCKET,
-	T_LINE,
-	T_RECTANGLE,
-	T_CIRCLE,
-	T_COUNT
-} tool;
-
-int getMouseX(void) {
-	int result = (GetMouseX() - offset.x)/scale;
-
-	if (result < 0) result = 0;
-	else if (result >= image.width) result = image.width - 1;
-	return result;
-}
-
-int getMouseY(void) {
-	int result = (GetMouseY() - offset.y)/scale;
-	
-	if (result < 0) result = 0;
-	else if (result >= image.height) result = image.height - 1;
-	return result;
-}
-
-void redraw(void) {
-	UnloadTexture(imagetx);
-	imagetx = LoadTextureFromImage(image);
-}
-
-void reloadAlphaPattern(void) {
-	UnloadRenderTexture(alphaPattern);
-	alphaPattern = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
-
-	int patternScale = scale/2;
-	if (patternScale < 3) patternScale = 3;
-
-	BeginTextureMode(alphaPattern);
-	for (int x = 0; x < GetScreenWidth(); x += patternScale) {
-		for (int y = 0; y < GetScreenHeight(); y += patternScale) {
-			char shade = x%(patternScale*2) ^ y%(patternScale*2) ? 85 : 170;
-			DrawRectangle(x, y, patternScale, patternScale, (Color) {shade, shade, shade, 255});
-		}
-	}
-	EndTextureMode();
-}
-
-Color fillOld, fillNew;
-
-// https://en.wikipedia.org/wiki/Flood_fill
-// Note: variables fillOld, fillNew should be set before calling
-void floodFill(int x, int y) {
-	if (x < 0 || x >= image.width) return;
-	if (y < 0 || y >= image.height) return;
-
-	if (
-		(
-			GETPIXEL(x, y, GP_RED) != fillOld.r ||
-			GETPIXEL(x, y, GP_GREEN) != fillOld.g ||
-			GETPIXEL(x, y, GP_BLUE) != fillOld.b ||
-			GETPIXEL(x, y, GP_ALPHA) != fillOld.a
-		) && (
-			GETPIXEL(x, y, GP_ALPHA) || fillOld.a
-		)
-	) return;
-
-	GETPIXEL(x, y, GP_RED) = fillNew.r;
-	GETPIXEL(x, y, GP_GREEN) = fillNew.g;
-	GETPIXEL(x, y, GP_BLUE) = fillNew.b;
-	GETPIXEL(x, y, GP_ALPHA) = fillNew.a;
-	floodFill(x, y + 1);
-	floodFill(x, y - 1);
-	floodFill(x - 1, y);
-	floodFill(x + 1, y);
-}
-
-void input(void) {
-	if (IsKeyPressed(KEY_L)) linePaint = !linePaint;
-
-	if (IsKeyPressed(KEY_N)) {
-		char *size = tinyfd_inputBox("New image", "Enter size as WxH, or one number used as both width and height:", " ");
-		if (!size) return;
-
-		int count, width, height;
-		const char **sizes = TextSplit(size, 'x', &count);
-
-		switch (count) {
-			case 1: {
-				width = atoi(sizes[0]);
-				height = width;
-				break;
+				case KEY_ESCAPE: {
+					s->commandBuf[0] = 0;
+					s->commandCursor = 0;
+					updateCursor(s);
+					break;
+				}
 			}
-
-			case 2: {
-				width = atoi(sizes[0]);
-				height = atoi(sizes[1]);
-				break;
-			}
-
-			default: {
-				tinyfd_messageBox("Error", "Invalid size specified", "ok", "error", 1);
-				return;
-			}
+			break;
 		}
 
-		UnloadImage(image);
-		image = GenImageColor(width, height, BLANK);
-		redraw();
-	}
-
-	if (IsKeyPressed(KEY_S)) {
-		char path[512];
-		strcpy(path, GetWorkingDirectory());
-		strcat(path, "/*");
-		char *filename = tinyfd_saveFileDialog("Save as", path, 0, NULL, NULL);
-		if (filename) ExportImage(image, filename);
+		default: {
+			int len = strlen(s->commandBuf);
+			s->commandBuf[len] = chr;
+			s->commandBuf[len + 1] = 0;
+			s->commandCursor++;
+			updateCursor(s);
+			break;
+		}
 	}
 
 	if (IsKeyPressed(KEY_LEFT)) {
-		tool--;
-		if (tool < 0) tool = 0;
+		s->tool--;
+		if (s->tool < 0) s->tool = 0;
 	}
 	if (IsKeyPressed(KEY_RIGHT)) {
-		tool++;
-		if (tool >= T_COUNT) tool = T_COUNT - 1;
+		s->tool++;
+		if (s->tool >= T_COUNT) s->tool = T_COUNT - 1;
 	}
 
-	if (IsKeyPressed('G')) grid = !grid;
+	if (IsKeyPressed('G')) s->grid = !s->grid;
 
-	scale += GetMouseWheelMove();
-	if (scale > 10) scale += GetMouseWheelMove();
-	if (scale < 1) scale = 1;
-	if (scale > 50) scale = 50;
-	if (GetMouseWheelMove() != 0.0f) reloadAlphaPattern();
+	s->scale += GetMouseWheelMove();
+	if (s->scale > 10) s->scale += GetMouseWheelMove();
+	if (s->scale < 1) s->scale = 1;
+	if (s->scale > 50) s->scale = 50;
+	if (GetMouseWheelMove() != 0.0f) reloadAlphaPattern(s);
 }
 
-void update(void) {
-	if (IsWindowResized()) reloadAlphaPattern();
+void update(State *s) {
+	if (IsWindowResized()) reloadAlphaPattern(s);
 
 	if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) || IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
-		Color color = IsMouseButtonDown(MOUSE_BUTTON_LEFT) ? colorA : colorB;
+		Color color = IsMouseButtonDown(MOUSE_BUTTON_LEFT) ? s->colorA : s->colorB;
 
-		switch (tool) {
+		switch (s->tool) {
 			case T_PENCIL: {
-				if (linePaint) {
-					ImageDrawLine(
-						&image,
-						getMouseX() + GetMouseDelta().x/scale,
-						getMouseY() + GetMouseDelta().y/scale,
-						getMouseX(),
-						getMouseY(),
-						color
-					);
-				} else {
-					ImageDrawPixel(&image, getMouseX(), getMouseY(), color);
-				}
+				drawLine(s, getMouseX(s), getMouseY(s), s->prevMouseX, s->prevMouseY, color);
 				break;
 			}
 
 			case T_ERASER: {
-				GETPIXEL(getMouseX(), getMouseY(), GP_RED) = 0;
-				GETPIXEL(getMouseX(), getMouseY(), GP_GREEN) = 0;
-				GETPIXEL(getMouseX(), getMouseY(), GP_BLUE) = 0;
-				GETPIXEL(getMouseX(), getMouseY(), GP_ALPHA) = 0;
+				GETPIXEL(getMouseX(s), getMouseY(s), GP_RED) = 0;
+				GETPIXEL(getMouseX(s), getMouseY(s), GP_GREEN) = 0;
+				GETPIXEL(getMouseX(s), getMouseY(s), GP_BLUE) = 0;
+				GETPIXEL(getMouseX(s), getMouseY(s), GP_ALPHA) = 0;
 				break;
 			}
 
 			case T_BUCKET: {
-				fillOld = GetPixelColor(
-					&GETPIXEL(getMouseX(), getMouseY(), GP_RED),
+				s->fillOld = GetPixelColor(
+					&GETPIXEL(getMouseX(s), getMouseY(s), GP_RED),
 					PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
 				);
-				if (ColorToInt(fillOld) != ColorToInt(color)) {
-					fillNew = color;
-					floodFill(getMouseX(), getMouseY());
+				if (ColorToInt(s->fillOld) != ColorToInt(color)) {
+					s->fillNew = color;
+					floodFill(s, getMouseX(s), getMouseY(s));
 				}
 				break;
 			}
 		}
-		redraw();
+		redraw(s);
 	}
 
 	if (IsMouseButtonDown(MOUSE_BUTTON_MIDDLE)) {
-		offset.x += GetMouseDelta().x;
-		offset.y += GetMouseDelta().y;
+		s->offset.x += GetMouseDelta().x;
+		s->offset.y += GetMouseDelta().y;
 	}
 }
 
-void draw(void) {
-	Rectangle imageRec = (Rectangle) {offset.x, offset.y, SCALED_W, SCALED_H};
+void draw(State *s) {
+	Rectangle imageRec = (Rectangle) {s->offset.x, s->offset.y, SCALED_W, SCALED_H};
 
-	DrawTextureRec(alphaPattern.texture, imageRec, offset, WHITE);
-	DrawRectangleLines(offset.x - 1, offset.y - 1, SCALED_W + 2, SCALED_H + 2, WHITE);
-	DrawTextureEx(imagetx, offset, 0.0f, scale, WHITE);
+	DrawTextureRec(s->alphaPattern.texture, imageRec, s->offset, WHITE);
+	DrawRectangleLines(s->offset.x - 1, s->offset.y - 1, SCALED_W + 2, SCALED_H + 2, WHITE);
+	DrawTextureEx(s->imagetx, s->offset, 0.0f, s->scale, WHITE);
 
 	DrawRectangleLines(
-		getMouseX()*scale + offset.x,
-		getMouseY()*scale + offset.y,
-		scale, scale, RED
+		getMouseX(s)*s->scale + s->offset.x,
+		getMouseY(s)*s->scale + s->offset.y,
+		s->scale, s->scale, RED
 	);
 
-	if (grid && scale > 1) {
-		for (int x = 0; x < image.width; x++) {
-			for (int y = 0; y < image.height; y++) {
-				DrawLine(x*scale + offset.x, offset.y, x*scale + offset.x, SCALED_H + offset.y, WHITE);
-				DrawLine(offset.x, y*scale + offset.y, SCALED_W + offset.x, y*scale + offset.y, WHITE);
+	if (s->grid && s->scale > 1) {
+		for (int x = 0; x < s->image.width; x++) {
+			for (int y = 0; y < s->image.height; y++) {
+				DrawLine(x*s->scale + s->offset.x, s->offset.y, x*s->scale + s->offset.x, SCALED_H + s->offset.y, WHITE);
+				DrawLine(s->offset.x, y*s->scale + s->offset.y, SCALED_W + s->offset.x, y*s->scale + s->offset.y, WHITE);
 			}	
 		}
 	}
 
-	bottomText[0] = 0;
-	strcat(bottomText, TextFormat("%d x %d x %d   ", image.width, image.height, scale));
-	strcat(bottomText, TextFormat("Mouse %d, %d   ", getMouseX(), getMouseY()));
-	strcat(bottomText, TextFormat("ColA %d %d %d %d   ", colorA.r, colorA.g, colorA.b, colorA.a));
-	strcat(bottomText, TextFormat("ColB %d %d %d %d   ", colorB.r, colorB.g, colorB.b, colorB.a));
-	strcat(bottomText, TextFormat("Tool %d   ", tool));
-	strcat(bottomText, "Press H for help");
+	s->bottomText[0] = 0;
+	strcat(s->bottomText, TextFormat("%d x %d x %d   ", s->image.width, s->image.height, s->scale));
+	strcat(s->bottomText, TextFormat("Mouse %d, %d   ", getMouseX(s), getMouseY(s)));
+	strcat(s->bottomText, TextFormat("ColA %d %d %d %d   ", s->colorA.r, s->colorA.g, s->colorA.b, s->colorA.a));
+	strcat(s->bottomText, TextFormat("ColB %d %d %d %d   ", s->colorB.r, s->colorB.g, s->colorB.b, s->colorB.a));
+	strcat(s->bottomText, TextFormat("Tool %d   ", s->tool));
+	strcat(s->bottomText, TextFormat("FPS %d   ", GetFPS()));
+	strcat(s->bottomText, "Press H for help");
+
+	if (strlen(s->message) && s->messageTimer) {
+		for (int x = -1; x < 2; x++) {
+			for (int y = -1; y < 2; y++) {
+				DRAWTEXTF(s->message, x, 20 + y, BLACK);
+			}
+		}
+
+		DRAWTEXTF(s->message, 0, 20, YELLOW);
+		s->messageTimer--;
+	}
 
 	for (int x = -1; x < 2; x++) {
 		for (int y = -1; y < 2; y++) {
-			DRAWTEXTF(bottomText, x, GetScreenHeight() - 20 + y, BLACK);
+			DRAWTEXTF(s->bottomText, x, GetScreenHeight() - 20 + y, BLACK);
 		}
 	}
 
-	DRAWTEXTF(bottomText, 0, GetScreenHeight() - 20, WHITE);
+	DRAWTEXTF(s->bottomText, 0, GetScreenHeight() - 20, WHITE);
+
+	for (int x = -1; x < 2; x++) {
+		for (int y = -1; y < 2; y++) {
+			DRAWTEXTF(s->renderedCommand, x, y, BLACK);
+		}
+	}
+
+	DRAWTEXTF(s->renderedCommand, 0, 0, WHITE);
 }
 
 int main(int argc, char **argv) {
@@ -269,25 +175,35 @@ int main(int argc, char **argv) {
 	SetConfigFlags(FLAG_WINDOW_RESIZABLE);
 	InitWindow(1024, 768, "gxSE");
 	SetTargetFPS(120);
+	SetExitKey(0);
 
-	font = LoadFontEx("assets/font.ttf", 20, NULL, 0);
+	State *s = calloc(1, sizeof(State));
+	s->scale = 4;
+	s->colorA = WHITE;
+	s->colorB = BLACK;
 
-	image = GenImageColor(32, 32, BLANK);
-	reloadAlphaPattern();
+	s->font = LoadFontEx("assets/font.ttf", 20, NULL, 0);
 
-	while (!WindowShouldClose()) {
-		input();
-		update();
+	s->image = GenImageColor(256, 256, BLANK);
+	reloadAlphaPattern(s);
+
+	while (!WindowShouldClose() && !s->shouldClose) {
+		input(s);
+		update(s);
 
 		BeginDrawing();
 		ClearBackground(BLACK);
-		draw();
+		draw(s);
+
+		s->prevMouseX = getMouseX(s);
+		s->prevMouseY = getMouseY(s);
+
 		EndDrawing();
-		frameCount++;
+		s->frameCount++;
 	}
 
-	UnloadImage(image);
-	UnloadTexture(imagetx);
+	UnloadImage(s->image);
+	UnloadTexture(s->imagetx);
 	CloseWindow();
 	return 0;
 }
